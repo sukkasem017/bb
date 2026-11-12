@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ผู้ดูแลระบบ | ลงทะเบียนนักศึกษา</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600&family=Prompt:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="admin">
+
+    <!-- ===== เข้าสู่ระบบ ===== -->
+    <div id="loginView">
+      <div class="brandbar"><span class="idcard-mark"></span> ลงทะเบียนนักศึกษา</div>
+      <div class="logincard">
+        <h1>เข้าสู่ระบบผู้ดูแล</h1>
+        <p class="sub">ใช้อีเมลและรหัสผ่านที่ผู้ดูแลระบบสร้างไว้</p>
+        <form id="loginForm">
+          <div class="field">
+            <label for="email">อีเมล</label>
+            <input id="email" type="email" autocomplete="username" required />
+          </div>
+          <div class="field">
+            <label for="password">รหัสผ่าน</label>
+            <input id="password" type="password" autocomplete="current-password" required />
+          </div>
+          <button type="submit" id="loginBtn">เข้าสู่ระบบ</button>
+        </form>
+        <div id="loginMsg" class="msg" role="alert"></div>
+        <div class="footer-link"><a href="index.html">กลับหน้าลงทะเบียน</a></div>
+      </div>
+    </div>
+
+    <!-- ===== แดชบอร์ด ===== -->
+    <div id="dashView" class="hidden">
+      <div class="topbar">
+        <div class="brandbar"><span class="idcard-mark"></span> ลงทะเบียนนักศึกษา</div>
+        <div class="actions">
+          <a class="btn secondary" href="index.html">หน้าลงทะเบียน</a>
+          <button class="secondary" id="logoutBtn">ออกจากระบบ</button>
+        </div>
+      </div>
+
+      <h1>ผู้ลงทะเบียน</h1>
+
+      <div class="stats">
+        <div class="stat hot"><span class="lbl">ลงทะเบียนทั้งหมด</span><span class="num" id="stTotal">0</span></div>
+        <div class="stat"><span class="lbl">ลงทะเบียนวันนี้</span><span class="num" id="stToday">0</span></div>
+        <div class="stat"><span class="lbl">จำนวนแผนก</span><span class="num" id="stDept">0</span></div>
+      </div>
+
+      <div class="panel">
+        <div class="toolbar">
+          <input id="search" type="search" placeholder="ค้นหาชื่อ เลขนักศึกษา แผนก หรือสาขา" aria-label="ค้นหา" />
+          <span class="spacer"></span>
+          <button class="secondary" id="refreshBtn">รีเฟรช</button>
+          <button id="csvBtn">ดาวน์โหลด CSV</button>
+        </div>
+        <div id="dashMsg" class="msg" role="alert"></div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>ผู้ลงทะเบียน</th>
+                <th>อายุ</th>
+                <th>แผนก</th>
+                <th>สาขา</th>
+                <th>ระดับชั้น</th>
+                <th>คติประจำใจ</th>
+                <th>ลงทะเบียนเมื่อ</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <script>
+    const { SUPABASE_URL, SUPABASE_ANON_KEY } = window.APP_CONFIG;
+    const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    const $ = (id) => document.getElementById(id);
+    let rows = [];
+
+    // ป้องกัน XSS: ข้อมูลที่ผู้ใช้กรอกต้อง escape ก่อนแสดงผล
+    function esc(s) {
+      return String(s ?? "").replace(/[&<>"']/g, (c) => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+      }[c]));
+    }
+    function showMsg(el, text, type) { el.textContent = text; el.className = "msg show " + type; }
+    function clearMsg(el) { el.className = "msg"; }
+    function fmtDate(iso) {
+      return new Date(iso).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" });
+    }
+
+    // ---------- Auth ----------
+    async function checkAdminAndShow() {
+      const { data: { session } } = await db.auth.getSession();
+      if (!session) return showLogin();
+
+      const { data, error } = await db
+        .from("admins").select("user_id").eq("user_id", session.user.id).maybeSingle();
+
+      if (error || !data) {
+        await db.auth.signOut();
+        showLogin();
+        showMsg($("loginMsg"), "บัญชีนี้ไม่มีสิทธิ์ผู้ดูแลระบบ", "err");
+        return;
+      }
+      $("loginView").classList.add("hidden");
+      $("dashView").classList.remove("hidden");
+      loadData();
+    }
+
+    function showLogin() {
+      $("dashView").classList.add("hidden");
+      $("loginView").classList.remove("hidden");
+    }
+
+    $("loginForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      clearMsg($("loginMsg"));
+      $("loginBtn").disabled = true;
+      const { error } = await db.auth.signInWithPassword({
+        email: $("email").value.trim(),
+        password: $("password").value,
+      });
+      $("loginBtn").disabled = false;
+      if (error) return showMsg($("loginMsg"), "อีเมลหรือรหัสผ่านไม่ถูกต้อง", "err");
+      $("password").value = "";
+      checkAdminAndShow();
+    });
+
+    $("logoutBtn").addEventListener("click", async () => {
+      await db.auth.signOut();
+      rows = [];
+      showLogin();
+    });
+
+    // ---------- Data ----------
+    async function loadData() {
+      clearMsg($("dashMsg"));
+      const { data, error } = await db
+        .from("registrations").select("*").order("created_at", { ascending: false });
+      if (error) {
+        console.error(error);
+        return showMsg($("dashMsg"), "โหลดข้อมูลไม่สำเร็จ ลองกดรีเฟรชอีกครั้ง", "err");
+      }
+      rows = data || [];
+      render();
+    }
+
+    function filtered() {
+      const q = $("search").value.trim().toLowerCase();
+      if (!q) return rows;
+      return rows.filter((r) =>
+        [r.first_name, r.last_name, r.student_id, r.department, r.branch, r.grade_level]
+          .some((v) => String(v ?? "").toLowerCase().includes(q))
+      );
+    }
+
+    function renderStats() {
+      const today = new Date().toDateString();
+      $("stTotal").textContent = rows.length;
+      $("stToday").textContent = rows.filter((r) => new Date(r.created_at).toDateString() === today).length;
+      $("stDept").textContent = new Set(rows.map((r) => String(r.department).trim()).filter(Boolean)).size;
+    }
+
+    function render() {
+      renderStats();
+      const list = filtered();
+
+      if (!list.length) {
+        $("tbody").innerHTML = `<tr><td colspan="8" class="empty">${
+          rows.length ? "ไม่พบรายการที่ตรงกับคำค้นหา" : "ยังไม่มีผู้ลงทะเบียน แชร์ลิงก์หน้าลงทะเบียนเพื่อเริ่มรับข้อมูล"
+        }</td></tr>`;
+        return;
+      }
+      $("tbody").innerHTML = list.map((r) => `
+        <tr>
+          <td>
+            <div class="person">
+              <div class="avatar">${esc(Array.from(r.first_name || "?")[0])}</div>
+              <div>
+                <div class="pname">${esc(r.first_name)} ${esc(r.last_name)}</div>
+                <div class="psid">${esc(r.student_id)}</div>
+              </div>
+            </div>
+          </td>
+          <td>${esc(r.age)}</td>
+          <td>${esc(r.department)}</td>
+          <td>${esc(r.branch)}</td>
+          <td><span class="chip">${esc(r.grade_level)}</span></td>
+          <td class="motto">${esc(r.motto)}</td>
+          <td class="when">${esc(fmtDate(r.created_at))}</td>
+          <td><button class="danger small" data-del="${esc(r.id)}">ลบ</button></td>
+        </tr>`).join("");
+    }
+
+    $("tbody").addEventListener("click", async (e) => {
+      const id = e.target.getAttribute("data-del");
+      if (!id) return;
+      if (!confirm("ลบข้อมูลนี้ถาวร ยืนยันหรือไม่?")) return;
+      const { error } = await db.from("registrations").delete().eq("id", id);
+      if (error) return showMsg($("dashMsg"), "ลบไม่สำเร็จ ลองใหม่อีกครั้ง", "err");
+      rows = rows.filter((r) => r.id !== id);
+      render();
+    });
+
+    $("search").addEventListener("input", render);
+    $("refreshBtn").addEventListener("click", loadData);
+
+    // ---------- CSV ----------
+    function csvCell(v) {
+      let s = String(v ?? "");
+      if (/^[=+\-@]/.test(s)) s = "'" + s; // กัน CSV injection ใน Excel
+      return '"' + s.replace(/"/g, '""') + '"';
+    }
+    $("csvBtn").addEventListener("click", () => {
+      const head = ["ชื่อ", "นามสกุล", "อายุ", "แผนก", "สาขา", "เลขนักศึกษา", "ระดับชั้น", "คติประจำใจ", "ลงทะเบียนเมื่อ"];
+      const lines = [head.map(csvCell).join(",")];
+      filtered().forEach((r) => {
+        lines.push([r.first_name, r.last_name, r.age, r.department, r.branch,
+          r.student_id, r.grade_level, r.motto, fmtDate(r.created_at)].map(csvCell).join(","));
+      });
+      // \ufeff = BOM ให้ Excel อ่านภาษาไทยได้ถูกต้อง
+      const blob = new Blob(["\ufeff" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "registrations.csv";
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
+
+    checkAdminAndShow();
+  </script>
+</body>
+</html>

@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ลงทะเบียนนักศึกษา</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600&family=Prompt:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="page">
+
+    <!-- ซ้าย: บัตรตัวอย่างที่อัปเดตตามที่พิมพ์ -->
+    <section class="intro">
+      <h1>ลงทะเบียนนักศึกษา</h1>
+      <p>กรอกข้อมูลในฟอร์ม บัตรด้านล่างจะเปลี่ยนตามที่คุณพิมพ์</p>
+
+      <article class="idcard" id="idcard" aria-label="ตัวอย่างบัตรลงทะเบียน">
+        <div class="idcard-band"></div>
+        <div class="idcard-head"><span class="idcard-mark"></span><span>บัตรลงทะเบียน</span></div>
+
+        <div class="idcard-body">
+          <div class="avatar" id="pv_avatar">?</div>
+          <div class="idcard-id">
+            <div class="pv-name pv-empty" id="pv_name">ชื่อ นามสกุล</div>
+            <div class="pv-sid pv-empty" id="pv_sid">เลขนักศึกษา</div>
+          </div>
+        </div>
+
+        <dl class="idcard-grid">
+          <div><dt>แผนก</dt><dd id="pv_department">-</dd></div>
+          <div><dt>สาขา</dt><dd id="pv_branch">-</dd></div>
+          <div><dt>ระดับชั้น</dt><dd id="pv_grade">-</dd></div>
+          <div><dt>อายุ</dt><dd id="pv_age">-</dd></div>
+        </dl>
+
+        <blockquote class="pv-motto pv-empty" id="pv_motto">คติประจำใจจะแสดงที่นี่</blockquote>
+        <div class="stamp" id="stamp" aria-hidden="true">ลงทะเบียนแล้ว</div>
+      </article>
+    </section>
+
+    <!-- ขวา: ฟอร์ม -->
+    <section>
+      <div class="formcard">
+        <form id="regForm" novalidate>
+          <h2>ข้อมูลส่วนตัว</h2>
+          <div class="grid">
+            <div>
+              <label for="first_name">ชื่อ <span class="req">*</span></label>
+              <input id="first_name" name="first_name" maxlength="100" required autocomplete="given-name" />
+            </div>
+            <div>
+              <label for="last_name">นามสกุล <span class="req">*</span></label>
+              <input id="last_name" name="last_name" maxlength="100" required autocomplete="family-name" />
+            </div>
+            <div>
+              <label for="age">อายุ <span class="req">*</span></label>
+              <input id="age" name="age" type="number" min="1" max="120" inputmode="numeric" required />
+            </div>
+            <div>
+              <label for="student_id">เลขนักศึกษา <span class="req">*</span></label>
+              <input id="student_id" name="student_id" maxlength="30" inputmode="numeric" required />
+            </div>
+          </div>
+
+          <h2>ข้อมูลการศึกษา</h2>
+          <div class="grid">
+            <div>
+              <label for="department">แผนก <span class="req">*</span></label>
+              <input id="department" name="department" maxlength="100" placeholder="เช่น แผนกช่างอิเล็กทรอนิกส์" required />
+            </div>
+            <div>
+              <label for="branch">สาขา <span class="req">*</span></label>
+              <input id="branch" name="branch" maxlength="100" placeholder="เช่น สาขาคอมพิวเตอร์" required />
+            </div>
+            <div class="full">
+              <label for="grade_level">ระดับชั้น <span class="req">*</span></label>
+              <select id="grade_level" name="grade_level" required>
+                <option value="">เลือกระดับชั้น</option>
+                <option>ปวช.1</option>
+                <option>ปวช.2</option>
+                <option>ปวช.3</option>
+                <option>ปวส.1</option>
+                <option>ปวส.2</option>
+                <option>ปริญญาตรี ปี 1</option>
+                <option>ปริญญาตรี ปี 2</option>
+                <option>ปริญญาตรี ปี 3</option>
+                <option>ปริญญาตรี ปี 4</option>
+              </select>
+            </div>
+          </div>
+
+          <h2>เกี่ยวกับคุณ</h2>
+          <div>
+            <label for="motto">คติประจำใจ</label>
+            <textarea id="motto" name="motto" maxlength="300" placeholder="ประโยคสั้นๆ ที่เป็นแรงบันดาลใจของคุณ"></textarea>
+            <div class="counter"><span id="mottoCount">0</span>/300</div>
+          </div>
+
+          <button type="submit" id="submitBtn">ลงทะเบียน</button>
+          <div id="msg" class="msg" role="status" aria-live="polite"></div>
+        </form>
+      </div>
+      <div class="footer-link"><a href="admin.html">สำหรับผู้ดูแลระบบ</a></div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <script>
+    const { SUPABASE_URL, SUPABASE_ANON_KEY } = window.APP_CONFIG;
+    const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    const $ = (id) => document.getElementById(id);
+    const form = $("regForm");
+    const msg = $("msg");
+    const btn = $("submitBtn");
+    const stamp = $("stamp");
+
+    function showMsg(text, type) {
+      msg.textContent = text;
+      msg.className = "msg show " + type;
+    }
+
+    // ---------- บัตรตัวอย่างแบบสด ----------
+    function setText(id, value, placeholder) {
+      const el = $(id);
+      const empty = !value;
+      el.textContent = empty ? placeholder : value;
+      el.classList.toggle("pv-empty", empty && (id === "pv_name" || id === "pv_sid" || id === "pv_motto"));
+    }
+
+    function updatePreview() {
+      const v = (id) => $(id).value.trim();
+      const fullName = [v("first_name"), v("last_name")].filter(Boolean).join(" ");
+      setText("pv_name", fullName, "ชื่อ นามสกุล");
+      setText("pv_sid", v("student_id"), "เลขนักศึกษา");
+      setText("pv_department", v("department"), "-");
+      setText("pv_branch", v("branch"), "-");
+      setText("pv_grade", v("grade_level"), "-");
+      setText("pv_age", v("age"), "-");
+      setText("pv_motto", v("motto") ? "“" + v("motto") + "”" : "", "คติประจำใจจะแสดงที่นี่");
+      $("pv_avatar").textContent = Array.from(v("first_name"))[0] || "?";
+      $("mottoCount").textContent = $("motto").value.length;
+    }
+
+    form.addEventListener("input", () => {
+      stamp.classList.remove("show");   // เริ่มกรอกชุดใหม่ ตราประทับหายไป
+      updatePreview();
+    });
+
+    // ---------- ส่งข้อมูล ----------
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      msg.className = "msg";
+
+      const v = (id) => $(id).value.trim();
+      const payload = {
+        first_name: v("first_name"),
+        last_name: v("last_name"),
+        age: parseInt(v("age"), 10),
+        department: v("department"),
+        branch: v("branch"),
+        student_id: v("student_id"),
+        grade_level: v("grade_level"),
+        motto: v("motto") || null,
+      };
+
+      if (!payload.first_name || !payload.last_name || !payload.department ||
+          !payload.branch || !payload.student_id || !payload.grade_level) {
+        return showMsg("กรอกข้อมูลที่มีเครื่องหมาย * ให้ครบก่อนลงทะเบียน", "err");
+      }
+      if (!Number.isInteger(payload.age) || payload.age < 1 || payload.age > 120) {
+        return showMsg("อายุต้องเป็นตัวเลขระหว่าง 1 ถึง 120", "err");
+      }
+
+      btn.disabled = true;
+      btn.textContent = "กำลังลงทะเบียน...";
+
+      const { error } = await db.from("registrations").insert(payload);
+
+      btn.disabled = false;
+      btn.textContent = "ลงทะเบียน";
+
+      if (error) {
+        if (error.code === "23505") {
+          return showMsg("เลขนักศึกษานี้ลงทะเบียนไว้แล้ว ตรวจสอบเลขอีกครั้ง", "err");
+        }
+        console.error(error);
+        return showMsg("ลงทะเบียนไม่สำเร็จ ลองใหม่อีกครั้งในอีกสักครู่", "err");
+      }
+
+      form.reset();            // ล้างฟอร์ม แต่ปล่อยบัตรไว้พร้อมตราประทับ
+      $("mottoCount").textContent = "0";
+      stamp.classList.remove("show");
+      void stamp.offsetWidth;  // รีสตาร์ทแอนิเมชัน
+      stamp.classList.add("show");
+      showMsg("ลงทะเบียนเรียบร้อยแล้ว", "ok");
+    });
+  </script>
+</body>
+</html>
